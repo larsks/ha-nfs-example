@@ -1,0 +1,5 @@
+pacemaker_packages:
+  - pcs
+  - pacemaker
+
+hacluster_password: "{{ lookup('password', 'credentials/hacluster', length=30) }}"

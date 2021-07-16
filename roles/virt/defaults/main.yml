@@ -1,0 +1,8 @@
+virt_pool: default
+virt_baseimage: Fedora-Cloud-Base-34-1.2.x86_64.raw
+virt_baseformat: raw
+virt_baseos: fedora34
+virt_network: default
+virt_ssh_key: id_rsa.pub
+virt_root_size: 10
+virt_mem: 4096

@@ -1,0 +1,13 @@
+- name: populate /etc/hosts
+  tags: [hosts]
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ hostvars[item].ansible_default_ipv4.address }} {{ hostvars[item].inventory_hostname }} {{ hostvars[item].inventory_hostname.split('.').0 }}"
+  when: hostvars[item].ansible_default_ipv4 is defined
+  loop: "{{ groups.all }}"
+
+- name: add nfs vip to /etc/hosts
+  tags: [hosts]
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ nfs_vip }} nfs.storage nfs"

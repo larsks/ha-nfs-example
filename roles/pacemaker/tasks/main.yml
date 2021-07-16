@@ -1,0 +1,48 @@
+- name: install pacemaker packages
+  package:
+    name: "{{ pacemaker_packages }}"
+    state: installed
+
+- name: set password for hacluster user
+  user:
+    name: hacluster
+    update_password: always
+    password: "{{ hacluster_password|password_hash('sha512') }}"
+
+- name: activate pacemaker
+  service:
+    name: pcsd
+    state: started
+    enabled: true
+
+- name: authorize hosts
+  command: >-
+    pcs host auth {{ ' '.join(ansible_play_hosts_all) }} -u hacluster -p {{ hacluster_password }}
+
+- name: check if cluster exists
+  command: pcs cluster config
+  register: clustercheck
+  failed_when: false
+  changed_when: clustercheck.rc != 0
+
+- name: create cluster
+  when: clustercheck is changed
+  command: pcs cluster setup hanfs --start {{ " ".join(ansible_play_hosts_all) }}
+
+- name: enable cluster services
+  service:
+    name: "{{ item }}"
+    enabled: true
+  loop:
+    - corosync
+    - pacemaker
+
+- name: get cluster properties
+  command: pcs property show
+  changed_when: false
+  register: clusterprops
+
+- name: disable stonith
+  when: >-
+    "stonith-enabled: false" not in clusterprops.stdout
+  command: pcs property set stonith-enabled=false

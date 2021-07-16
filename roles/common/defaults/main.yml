@@ -1,0 +1,5 @@
+common_packages:
+  - strace
+  - tcpdump
+  - git
+  - vim-enhanced

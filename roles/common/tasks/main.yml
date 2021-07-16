@@ -1,0 +1,14 @@
+- name: set hostname
+  command: hostnamectl set-hostname {{ inventory_hostname }}
+  when: ansible_fqdn != inventory_hostname
+
+- name: ensure packages are up-to-date
+  tags: [upgrade]
+  package:
+    name: "*"
+    state: latest
+
+- name: install common packages
+  package:
+    name: "{{ common_packages }}"
+    state: installed

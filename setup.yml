@@ -1,0 +1,9 @@
+- hosts: all
+  gather_facts: true
+  roles:
+    - common
+
+- hosts: all
+  gather_facts: true
+  roles:
+    - etchosts

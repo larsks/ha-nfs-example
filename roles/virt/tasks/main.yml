@@ -1,0 +1,57 @@
+- name: check if vm exists
+  delegate_to: localhost
+  command: virsh desc {{ inventory_hostname }}
+  register: vmcheck
+  failed_when: false
+  changed_when: vmcheck.rc != 0
+
+- name: create vm
+  delegate_to: localhost
+  when: vmcheck is changed
+  # throttle: 1 because bugs
+  throttle: 1
+  command: >-
+    virt-install
+    -n {{ inventory_hostname }}
+    -r {{ virt_mem }}
+    --disk pool={{ virt_pool }},size={{ virt_root_size }},backing_store={{ virt_baseimage }},backing_format={{ virt_baseformat }}
+    {% for disk in virt_extra_disks|default([]) -%}
+    --disk pool={{ virt_pool }},size={{ disk.size }}
+    {% endfor %}
+    --os-variant {{ virt_baseos }}
+    --network network={{ virt_network }}
+    --cloud-init ssh-key={{ virt_ssh_key }}
+    --noautoconsole
+  register: create
+
+- when: vmcheck is changed
+  block:
+    - name: wait for vm to start
+      wait_for_connection:
+
+    - name: shut down vm
+      delegate_to: localhost
+      command: virsh shutdown {{ inventory_hostname }}
+      failed_when: false
+
+    - name: wait for vm to shut down
+      delegate_to: localhost
+      command: virsh domid {{ inventory_hostname }}
+      register: wait
+      until: wait.stdout == "-"
+      delay: 2
+      retries: 30
+
+    - name: start vm
+      delegate_to: localhost
+      command: virsh start {{ inventory_hostname }}
+
+- name: start vm
+  delegate_to: localhost
+  command: virsh start {{ inventory_hostname }}
+  register: vmstart
+  failed_when: vmstart.rc != 0 and "Domain is already active" not in vmstart.stderr
+  when: vmcheck is success
+
+- name: wait for vm to start
+  wait_for_connection:

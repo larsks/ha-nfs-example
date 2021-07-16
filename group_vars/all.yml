@@ -1,0 +1,13 @@
+nfs_vip: 192.168.122.254
+
+ganesha_recovery_pool: cephfs.tank.meta
+ganesha_recovery_user: nfsmeta
+
+ganesha_exports:
+  - id: 100
+    path: /
+    pseudo_path: /data
+    fs: tank
+    user: nfs
+
+ganesha_nodeid: "nfs.storage"

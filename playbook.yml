@@ -1,0 +1,112 @@
+- import_playbook: setup.yml
+
+- hosts: ceph
+  roles:
+    - ceph
+
+- hosts: ceph[0]
+  tags: [ceph]
+  tasks:
+    - name: install ceph
+      tags: [ceph.bootstrap]
+      command: >-
+        cephadm bootstrap --mon-ip {{ ansible_default_ipv4.address }}
+        --allow-fqdn-hostname
+      args:
+        creates: /etc/ceph/ceph.conf
+
+    - name: add admin label to host
+      command: ceph orch host label add {{ inventory_hostname }} _admin
+
+    - name: add devices
+      command: ceph orch daemon add osd "{{ item }}"
+      loop:
+        - ceph.storage:/dev/vdb
+
+    - name: check if cephfs tank exists
+      changed_when: false
+      command: ceph fs status tank
+      register: tank_status
+
+    - name: create cephfs tank
+      command: ceph fs volume create tank
+      when: >-
+        "Invalid filesystem" in tank_status.stderr
+
+    - name: check for min_size on tank
+      changed_when: false
+      command: ceph osd pool get cephfs.tank.meta min_size
+      register: tank_min_size
+
+    - name: set tank min_size
+      when: >-
+        "min_size: 1" not in tank_min_size.stdout
+      block:
+        - command: ceph osd pool set cephfs.tank.meta min_size 1
+        - command: ceph osd pool set cephfs.tank.data min_size 1
+
+    - name: create client.nfs user
+      command: ceph fs authorize tank client.nfs / rw
+      register: client_nfs
+
+    - name: create client.nfsmeta user
+      command: >-
+        ceph auth get-or-create client.nfsmeta
+      register: client_nfsmeta
+
+    - name: set caps for client.nfsmeta
+      command: >
+        ceph auth caps client.nfsmeta
+        mon 'allow r'
+        osd 'allow rw pool=cephfs.tank.meta namespace=ganesha'
+
+    - name: generate ceph conf
+      changed_when: false
+      command: ceph config generate-minimal-conf
+      register: ceph_conf
+
+- hosts: nfs
+  roles:
+    - pacemaker
+    - ganesha
+  tasks:
+    - name: create ceph.conf
+      when: hostvars[groups.ceph.0].ceph_conf is defined
+      copy:
+        dest: /etc/ceph/ceph.conf
+        content: |
+          {{ hostvars[groups.ceph.0].ceph_conf.stdout }}
+
+    - name: create keyrings
+      loop:
+        - client_nfs
+        - client_nfsmeta
+      when: hostvars[groups.ceph.0][item] is defined
+      copy:
+        dest: /etc/ceph/ceph.{{ item.replace('_', '.') }}.keyring
+        content: |
+          {{ hostvars[groups.ceph.0][item].stdout }}
+
+- hosts: clients
+  tags: [clients]
+  tasks:
+    - name: install packages
+      package:
+        name: "{{ packages }}"
+        state: installed
+      vars:
+        packages:
+          - nfs-utils
+
+    - name: ensure mountpoint exists
+      file:
+        path: /data
+        state: directory
+
+    - name: mount filesystem
+      mount:
+        src: nfs.storage:/data
+        path: /data
+        state: present
+        fstype: nfs
+        opts: nfsvers=4,minorversion=2,noauto

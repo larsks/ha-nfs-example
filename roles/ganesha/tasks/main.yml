@@ -1,0 +1,9 @@
+- name: install packages
+  package:
+    name: "{{ ganesha_packages }}"
+    state: installed
+
+- name: install ganesha configuration
+  template:
+    src: ganesha.conf
+    dest: /etc/ganesha/ganesha.conf

@@ -1,0 +1,11 @@
+ganesha_packages:
+  - nfs-ganesha
+  - nfs-ganesha-ceph
+  - nfs-ganesha-rados-grace
+  - nfs-ganesha-rados-urls
+  - ceph-common
+  - ceph-fuse
+
+ganesha_recovery_backend: rados_cluster
+ganesha_recovery_namespace: ganesha
+ganesha_grace_period: 60

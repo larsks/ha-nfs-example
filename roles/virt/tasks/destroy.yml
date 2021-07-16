@@ -1,0 +1,22 @@
+- name: check if vm is running
+  delegate_to: localhost
+  command: virsh domid {{ inventory_hostname }}
+  register: vmrunning
+  failed_when: false
+
+- name: power off vm
+  delegate_to: localhost
+  command: virsh destroy {{ inventory_hostname }}
+  when: vmrunning.stdout == "-"
+
+- name: check if vm exists
+  delegate_to: localhost
+  command: virsh desc {{ inventory_hostname }}
+  register: vmexists
+  failed_when: false
+  changed_when: vmexists.rc == 0
+
+- name: undefine vm
+  delegate_to: localhost
+  command: virsh undefine --remove-all-storage {{ inventory_hostname }}
+  when: vmexists is changed
