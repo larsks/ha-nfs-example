@@ -100,17 +100,18 @@
         xmlstring: "{{ cibxml.stdout }}"
         xpath: 'configuration/resources//primitive'
         content: attribute
+      failed_when: false
       register: resources
 
     - name: create nfs_vip resource
-      when: not resources.matches|selectattr('primitive.id', 'eq', 'nfs_vip')|list
+      when: not resources.matches|default([])|selectattr('primitive.id', 'eq', 'nfs_vip')|list
       command: >-
         pcs resource create --group nfs nfs_vip
         IPaddr2 ip={{ nfs_vip|ipaddr("address") }} cidr_netmask={{ nfs_vip|ipaddr("prefix") }}
         op monitor interval=10s
 
     - name: create nfs_vip resource
-      when: not resources.matches|selectattr('primitive.id', 'eq', 'nfsd')|list
+      when: not resources.matches|default([])|selectattr('primitive.id', 'eq', 'nfsd')|list
       command: >-
         pcs resource create --group nfs nfsd
         systemd:nfs-ganesha
