@@ -1,15 +1,18 @@
 - name: check if vm is running
+  tags: [virt.destroy]
   delegate_to: localhost
   command: virsh domid {{ inventory_hostname }}
   register: vmrunning
   failed_when: false
 
-- name: power off vm
+- name: destroy vm
+  tags: [virt.destroy]
   delegate_to: localhost
   command: virsh destroy {{ inventory_hostname }}
-  when: vmrunning.stdout == "-"
+  when: vmrunning.stdout != "-"
 
 - name: check if vm exists
+  tags: [virt.undefine]
   delegate_to: localhost
   command: virsh desc {{ inventory_hostname }}
   register: vmexists
@@ -17,6 +20,7 @@
   changed_when: vmexists.rc == 0
 
 - name: undefine vm
+  tags: [virt.undefine]
   delegate_to: localhost
   command: virsh undefine --remove-all-storage {{ inventory_hostname }}
   when: vmexists is changed
