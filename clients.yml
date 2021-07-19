@@ -20,4 +20,4 @@
         path: /data
         state: mounted
         fstype: nfs
-        opts: nfsvers=4,minorversion=2,noauto
+        opts: nfsvers=4,minorversion=2
