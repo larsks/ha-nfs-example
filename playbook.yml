@@ -29,13 +29,13 @@
   tags: [ceph]
   become: true
   tasks:
-    - name: get device list
+    - name: wait for ceph to discover devices
       command: ceph orch device ls
       register: devices
+      until: devices.stdout_lines|length == groups.ceph_servers|length + 1
+      retries: 24
+      delay: 5
       changed_when: false
-
-    - debug:
-        var: devices.stdout
 
     - name: add devices
       command: ceph orch apply osd --all-available-devices
