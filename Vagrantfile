@@ -1,7 +1,7 @@
 # vim: set ft=ruby:
 
 Vagrant.configure("2") do |config|
-  num_ceph=2
+  num_ceph=3
   num_nfs=2
   num_clients=2
 
