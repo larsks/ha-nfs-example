@@ -1,9 +1,11 @@
 - name: install packages
+  become: true
   package:
     name: "{{ ganesha_packages }}"
     state: installed
 
 - name: install ganesha configuration
+  become: true
   template:
     src: ganesha.conf
     dest: /etc/ganesha/ganesha.conf

@@ -1,27 +1,44 @@
-- import_playbook: setup.yml
+- hosts: all
+  tags: [hosts]
+  gather_facts: true
+  roles:
+    - etchosts
 
-- hosts: ceph
+- hosts: ceph_servers
+  tags: [ceph]
   roles:
     - ceph
 
-- hosts: ceph[0]
+- hosts: ceph_servers[0]
   tags: [ceph]
-  tasks:
-    - name: install ceph
-      tags: [ceph.bootstrap]
-      command: >-
-        cephadm bootstrap --mon-ip {{ ansible_default_ipv4.address }}
-        --allow-fqdn-hostname
-      args:
-        creates: /etc/ceph/ceph.conf
+  gather_facts: true
+  roles:
+    - ceph/bootstrap
 
-    - name: add admin label to host
-      command: ceph orch host label add {{ inventory_hostname }} _admin
+- hosts: ceph_servers:!ceph_servers[0]
+  tags: [ceph]
+  roles:
+    - ceph/config_ssh
+
+- hosts: ceph_servers[0]
+  tags: [ceph]
+  roles:
+    - ceph/add_hosts
+
+- hosts: ceph_servers[0]
+  tags: [ceph]
+  become: true
+  tasks:
+    - name: get device list
+      command: ceph orch device ls
+      register: devices
+      changed_when: false
+
+    - debug:
+        var: devices.stdout
 
     - name: add devices
-      command: ceph orch daemon add osd "{{ item }}"
-      loop:
-        - ceph.storage:/dev/vdb
+      command: ceph orch apply osd --all-available-devices
 
     - name: check if cephfs tank exists
       changed_when: false
@@ -39,11 +56,13 @@
       register: tank_min_size
 
     - name: set tank min_size
+      vars:
+        min_size: "{{ [groups.ceph_servers|length, 2]|min }}"
       when: >-
-        "min_size: 1" not in tank_min_size.stdout
+        "min_size: {}".format(min_size) not in tank_min_size.stdout
       block:
-        - command: ceph osd pool set cephfs.tank.meta min_size 1
-        - command: ceph osd pool set cephfs.tank.data min_size 1
+        - command: ceph osd pool set cephfs.tank.meta min_size {{ min_size }}
+        - command: ceph osd pool set cephfs.tank.data min_size {{ min_size }}
 
     - name: create client.nfs user
       command: ceph fs authorize tank client.nfs / rw
@@ -65,30 +84,55 @@
       command: ceph config generate-minimal-conf
       register: ceph_conf
 
-- hosts: nfs
+    - name: save ceph.conf locally
+      delegate_to: localhost
+      copy:
+        dest: credentials/ceph.conf
+        content: |
+          {{ ceph_conf.stdout }}
+
+    - name: save keyrings
+      delegate_to: localhost
+      copy:
+        dest: credentials/ceph.client.{{ item.name }}.keyring
+        content: "{{ item.content }}"
+      loop:
+        - name: nfs
+          content: |
+            {{ client_nfs.stdout }}
+        - name: nfsmeta
+          content: |
+            {{ client_nfsmeta.stdout }}
+
+- hosts: nfs_servers
+  tags: [ceph]
+  become: true
+  tasks:
+    - name: install ceph-common
+      package:
+        name: ceph-common
+        state: installed
+
+    - name: create ceph.conf
+      copy:
+        dest: /etc/ceph/ceph.conf
+        src: credentials/ceph.conf
+
+    - name: create keyrings
+      copy:
+        dest: /etc/ceph/
+        src: "{{ item }}"
+      loop: "{{ query('fileglob', 'credentials/*.keyring') }}"
+
+- hosts: nfs_servers
+  tags: [nfs]
   roles:
     - pacemaker
     - ganesha
-  tasks:
-    - name: create ceph.conf
-      when: hostvars[groups.ceph.0].ceph_conf is defined
-      copy:
-        dest: /etc/ceph/ceph.conf
-        content: |
-          {{ hostvars[groups.ceph.0].ceph_conf.stdout }}
 
-    - name: create keyrings
-      loop:
-        - client_nfs
-        - client_nfsmeta
-      when: hostvars[groups.ceph.0][item] is defined
-      copy:
-        dest: /etc/ceph/ceph.{{ item.replace('_', '.') }}.keyring
-        content: |
-          {{ hostvars[groups.ceph.0][item].stdout }}
-
-- hosts: nfs[0]
-  tags: [cluster]
+- hosts: nfs_servers[0]
+  tags: [nfs]
+  become: true
   tasks:
     - name: get cib
       changed_when: false

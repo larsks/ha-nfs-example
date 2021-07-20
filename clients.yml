@@ -1,5 +1,6 @@
 - hosts: clients
   tags: [clients]
+  become: true
   tasks:
     - name: install packages
       package:
@@ -16,7 +17,7 @@
 
     - name: mount filesystem
       mount:
-        src: nfs.storage:/data
+        src: "{{ nfs_vhostname }}:/data"
         path: /data
         state: mounted
         fstype: nfs

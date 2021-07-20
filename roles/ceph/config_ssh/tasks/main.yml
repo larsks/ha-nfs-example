@@ -1,0 +1,5 @@
+- name: install ceph ssh key
+  become: true
+  authorized_key:
+    user: root
+    key: "{{ lookup('file', 'credentials/ceph.pub') }}"

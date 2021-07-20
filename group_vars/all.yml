@@ -1,4 +1,7 @@
-nfs_vip: 192.168.122.254
+ansible_python_interpreter: /usr/bin/python3
+
+nfs_vhostname: nfs.storage
+nfs_vip: 192.168.121.254
 
 ganesha_recovery_pool: cephfs.tank.meta
 ganesha_recovery_user: nfsmeta
@@ -11,3 +14,5 @@ ganesha_exports:
     user: nfs
 
 ganesha_nodeid: "nfs.storage"
+
+root_authorized_keys: https://github.com/larsks.keys

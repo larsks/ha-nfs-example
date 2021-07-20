@@ -1,0 +1,14 @@
+- name: install ceph
+  become: true
+  command: >-
+    cephadm bootstrap --mon-ip {{ ansible_default_ipv4.address }}
+    --allow-fqdn-hostname
+  args:
+    creates: /etc/ceph/ceph.conf
+
+- name: save ceph public key
+  become: true
+  fetch:
+    src: /etc/ceph/ceph.pub
+    dest: credentials/
+    flat: true

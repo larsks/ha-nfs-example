@@ -1,14 +1,24 @@
+- name: install root authorized_keys
+  become: true
+  authorized_key:
+    user: root
+    key: "{{ root_authorized_keys }}"
+    state: present
+
 - name: set hostname
+  become: true
   command: hostnamectl set-hostname {{ inventory_hostname }}
   when: ansible_fqdn != inventory_hostname
 
 - name: ensure packages are up-to-date
   tags: [upgrade]
+  become: true
   package:
     name: "*"
     state: latest
 
 - name: install common packages
+  become: true
   package:
     name: "{{ common_packages }}"
     state: installed

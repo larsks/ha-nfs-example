@@ -1,4 +1,5 @@
 - name: populate /etc/hosts
+  become: true
   tags: [hosts]
   lineinfile:
     path: /etc/hosts
@@ -7,7 +8,8 @@
   loop: "{{ groups.all }}"
 
 - name: add nfs vip to /etc/hosts
+  become: true
   tags: [hosts]
   lineinfile:
     path: /etc/hosts
-    line: "{{ nfs_vip }} nfs.storage nfs"
+    line: "{{ nfs_vip }} {{ nfs_vhostname }}"
