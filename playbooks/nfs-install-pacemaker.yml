@@ -1,0 +1,85 @@
+- hosts: nfs_servers
+  become: true
+  vars:
+    pacemaker_packages:
+      - pcs
+      - pacemaker
+    hacluster_password: >-
+      {{ lookup('password', 'credentials/hacluster', length=30) }}
+  tasks:
+    - name: install pacemaker packages
+      become: true
+      package:
+        name: "{{ pacemaker_packages }}"
+        state: installed
+
+    - name: create directory for rbd ocf resource
+      file:
+        path: /usr/lib/ocf/resource.d/ceph
+        state: directory
+
+    - name: install rbd ocf resource
+      copy:
+        src: ../files/resource.d/rbd
+        dest: /usr/lib/ocf/resource.d/ceph/rbd
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: set password for hacluster user
+      become: true
+      user:
+        name: hacluster
+        update_password: always
+        password: "{{ hacluster_password|password_hash('sha512') }}"
+
+    - name: activate pacemaker
+      become: true
+      service:
+        name: pcsd
+        state: started
+        enabled: true
+
+    - name: enable cluster services
+      become: true
+      service:
+        name: "{{ item }}"
+        enabled: true
+      loop:
+        - corosync
+        - pacemaker
+
+    - name: authorize hosts
+      become: true
+      command: >-
+        pcs host auth
+        {{ ' '.join(groups.nfs_servers) }}
+        -u hacluster -p "{{ hacluster_password }}"
+
+- hosts: nfs_servers[0]
+  become: true
+  tasks:
+    - name: check if cluster exists
+      become: true
+      command: pcs cluster config
+      register: clustercheck
+      failed_when: false
+      changed_when: clustercheck.rc != 0
+
+    - name: create cluster
+      become: true
+      when: clustercheck is changed
+      command: >-
+        pcs cluster setup hanfs --start {{ " ".join(groups.nfs_servers) }}
+
+    - name: get cluster properties
+      become: true
+      command: pcs property show
+      changed_when: false
+      register: clusterprops
+
+    - name: disable stonith
+      become: true
+      when: >-
+        "stonith-enabled: false" not in clusterprops.stdout
+      command: pcs property set stonith-enabled=false

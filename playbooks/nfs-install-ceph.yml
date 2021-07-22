@@ -1,0 +1,31 @@
+- hosts: nfs_servers
+  become: true
+  vars:
+    ceph_packages:
+      - ceph-common
+  tasks:
+    - name: install ceph packages
+      package:
+        name: "{{ ceph_packages }}"
+        state: installed
+
+    - name: install ceph.conf
+      copy:
+        src: credentials/ceph.conf
+        dest: /etc/ceph/
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: install client.rbd keyring
+      copy:
+        src: credentials/ceph.client.rbd.keyring
+        dest: /etc/ceph
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: verify keyring
+      command: >-
+        ceph --user rbd -s
+      changed_when: false

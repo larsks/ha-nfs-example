@@ -1,0 +1,7 @@
+- import_playbook: ../part2/playbook.yml
+
+- import_playbook: nfs-install-ganesha.yml
+- import_playbook: nfs-register-hosts.yml
+- import_playbook: nfs-create-resources-ganesha.yml
+
+- import_playbook: clients-configure-client.yml

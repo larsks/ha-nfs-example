@@ -1,0 +1,34 @@
+- hosts: nfs_servers[0]
+  become: true
+  tasks:
+    - name: get cib
+      changed_when: false
+      command: pcs cluster cib
+      register: cibxml
+
+    - name: get list of resources
+      xml:
+        xmlstring: "{{ cibxml.stdout }}"
+        xpath: 'configuration/resources//primitive'
+        content: attribute
+      failed_when: false
+      register: resources
+
+    - name: create rbd resource
+      when: >-
+        not resources.matches|default([])|
+        selectattr('primitive.id', 'eq', 'nfs_rbd')|list
+      command: >-
+        pcs
+        resource create --group nfs nfs_rbd
+        ocf:ceph:rbd name=nfs_store user=rbd
+
+    - name: create filesystem resource
+      when: >-
+        not resources.matches|default([])|
+        selectattr('primitive.id', 'eq', 'nfs_fs')|list
+      command: >-
+        pcs
+        resource create --group nfs nfs_fs
+        ocf:heartbeat:Filesystem
+        device=/dev/rbd/rbd/nfs_store directory=/data fstype=xfs

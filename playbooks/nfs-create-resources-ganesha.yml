@@ -1,0 +1,35 @@
+- hosts: nfs_servers[0]
+  become: true
+  tasks:
+    - name: get cib
+      changed_when: false
+      command: pcs cluster cib
+      register: cibxml
+
+    - name: get list of resources
+      xml:
+        xmlstring: "{{ cibxml.stdout }}"
+        xpath: 'configuration/resources//primitive'
+        content: attribute
+      failed_when: false
+      register: resources
+
+    - name: create vip resource
+      when: >-
+        not resources.matches|default([])|
+        selectattr('primitive.id', 'eq', 'nfs_vip')|list
+      command: >-
+        pcs
+        resource create --group nfs nfs_vip
+        ocf:heartbeat:IPaddr2
+        ip={{ nfs_vip|ipaddr("address") }}
+        cidr_netmask={{ nfs_vip|ipaddr("prefix") }}
+
+    - name: create nfs_ganesha resource
+      when: >-
+        not resources.matches|default([])|
+        selectattr('primitive.id', 'eq', 'nfs_ganesha')|list
+      command: >-
+        pcs
+        resource create --group nfs nfs_ganesha
+        systemd:nfs-ganesha

@@ -1,0 +1,14 @@
+# This playbook is called by Vagrant's Ansible provisioner to perform
+# basic configuration tasks on the hosts.
+
+- hosts: all
+  become: true
+  tasks:
+    - name: ensure packages are up-to-date
+      tags: [upgrade]
+      package:
+        name: "*"
+        state: latest
+
+    - name: reboot to activate new kernel
+      reboot:

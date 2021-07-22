@@ -1,0 +1,8 @@
+- import_playbook: ../part1/playbook.yml
+
+- import_playbook: ceph-create-pool-rbd.yml
+- import_playbook: ceph-create-user-rbd.yml
+- import_playbook: nfs-install-pacemaker.yml
+- import_playbook: nfs-install-ceph.yml
+- import_playbook: nfs-create-rbd.yml
+- import_playbook: nfs-create-resources-rbd.yml

@@ -1,0 +1,23 @@
+- hosts: clients
+  become: true
+  vars:
+    client_packages:
+      - nfs-utils
+  tasks:
+    - name: install packages
+      package:
+        name: "{{ client_packages }}"
+        state: installed
+
+    - name: ensure mountpoint exists
+      file:
+        path: /data
+        state: directory
+
+    - name: mount filesystem
+      mount:
+        src: "{{ nfs_vip|ipaddr('address') }}:/data"
+        path: /data
+        state: mounted
+        fstype: nfs
+        opts: nfsvers=4.2

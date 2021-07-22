@@ -1,0 +1,11 @@
+- hosts: ceph_servers
+  vars:
+    ceph_packages:
+      - ceph-common
+      - cephadm
+  become: true
+  tasks:
+    - name: install ceph packages
+      package:
+        name: "{{ ceph_packages }}"
+        state: installed

@@ -1,0 +1,22 @@
+- hosts: nfs_servers
+  become: true
+  vars:
+    ganesha_packages:
+      - nfs-ganesha
+      - nfs-ganesha-ceph
+      - nfs-ganesha-rados-grace
+      - nfs-ganesha-rados-urls
+      - nfs-ganesha-rgw
+      - nfs-ganesha-vfs
+  tasks:
+    - name: install packages
+      become: true
+      package:
+        name: "{{ ganesha_packages }}"
+        state: installed
+
+    - name: install ganesha configuration
+      become: true
+      template:
+        src: ../files/ganesha.conf
+        dest: /etc/ganesha/ganesha.conf

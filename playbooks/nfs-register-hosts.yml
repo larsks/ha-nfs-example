@@ -1,0 +1,22 @@
+- hosts: nfs_servers[0]
+  become: true
+  tasks:
+    - name: check if nodeid is registered with recovery backend
+      command: >-
+        ganesha-rados-grace
+        --userid rbd
+        --pool rbd
+        --ns ganesha
+        member hanfs
+      register: nodeid_check
+      failed_when: false
+      changed_when: nodeid_check.rc != 0
+
+    - name: register nodeid with recovery backend
+      when: nodeid_check is changed
+      command: >-
+        ganesha-rados-grace
+        --userid rbd
+        --pool rbd
+        --ns ganesha
+        add hanfs

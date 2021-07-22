@@ -1,0 +1,29 @@
+- hosts: ceph_servers[0]
+  become: true
+  tasks:
+    - name: check if client.rbd user exists
+      command: >-
+        ceph auth get client.rbd
+      register: usercheck
+      failed_when: false
+      changed_when: usercheck.rc != 0
+
+    - name: create client.rbd user
+      command: >-
+        ceph auth add client.rbd
+        mon 'profile rbd'
+        osd 'profile rbd pool=rbd,profile rbd pool=rbd namespace=ganesha'
+      when: usercheck is changed
+
+    - name: export keyring for client.rbd
+      command: >-
+        ceph auth get client.rbd
+      register: client_rbd
+      changed_when: false
+
+    - name: save keyrings
+      delegate_to: localhost
+      copy:
+        dest: credentials/ceph.client.rbd.keyring
+        content: |
+          {{ client_rbd.stdout }}

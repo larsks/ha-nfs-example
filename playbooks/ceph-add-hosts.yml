@@ -1,0 +1,9 @@
+- name: add hosts to ceph cluster
+  hosts: ceph_servers[0]
+  become: true
+  tasks:
+    - name: add host to ceph cluster
+      command: >-
+        ceph orch host add {{ item }}
+      when: item != inventory_hostname
+      loop: "{{ groups.ceph_servers }}"

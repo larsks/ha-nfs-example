@@ -1,0 +1,17 @@
+- name: copy ceph public key to local host
+  hosts: ceph_servers[0]
+  tasks:
+    - name: copy ceph public key to local host
+      fetch:
+        src: /etc/ceph/ceph.pub
+        dest: credentials/ceph.pub
+        flat: true
+
+- name: install ceph public key on cluster hosts
+  hosts: ceph_servers:!ceph_servers[0]
+  become: true
+  tasks:
+    - name: install ceph public key
+      authorized_key:
+        user: root
+        key: "{{ lookup('file', 'credentials/ceph.pub') }}"

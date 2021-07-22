@@ -1,0 +1,64 @@
+- hosts: nfs_servers[0]
+  become: true
+  tasks:
+    - name: check if cluster has been configured
+      command: >-
+        pcs resource status
+      register: rscheck
+      changed_when: false
+
+    - when: >-
+        "NO resources configured" in rscheck.stdout
+      block:
+        - name: check if nfs_store exists
+          command: >-
+            rbd -n client.rbd info nfs_store
+          register: rbdcheck
+          failed_when: false
+          changed_when: rbdcheck.rc != 0
+
+        - name: create nfs_store
+          command: >-
+            rbd -n client.rbd create nfs_store --size 10G
+          when: rbdcheck is changed
+
+        - name: map nfs_store
+          command: >-
+            rbd -n client.rbd device map nfs_store
+
+        - name: look for filesystem on nfs_store
+          command: >-
+            wipefs -J /dev/rbd/rbd/nfs_store
+          register: fscheck_cmd
+          changed_when: false
+
+        - name: create filesystem on nfs_store
+          when: fscheck.signatures|length == 0
+          vars:
+            fscheck: "{{ fscheck_cmd.stdout|from_json }}"
+          command: >-
+            mkfs.xfs /dev/rbd/rbd/nfs_store
+
+        - block:
+            - name: temporarily mount filesystem
+              mount:
+                src: /dev/rbd/rbd/nfs_store
+                path: /data
+                fstype: xfs
+                opts: noauto
+                state: mounted
+
+            - name: ensure correct selinux permissions on export
+              command: >-
+                restorecon -R /data
+
+          always:
+            - name: unmount volume
+              command: >-
+                umount /data
+              ignore_errors: true
+      always:
+        - name: unmap rbd
+          command: >-
+            rbd -n client.rbd device unmap nfs_store
+          ignore_errors: true
