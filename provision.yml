@@ -1,0 +1,23 @@
+- hosts: all
+  become: true
+  tasks:
+    - name: ensure packages are up-to-date
+      tags: [upgrade]
+      package:
+        name: "*"
+        state: latest
+
+    - name: reboot to activate new kernel
+      reboot:
+
+- hosts: ceph_servers
+  vars:
+    ceph_packages:
+      - ceph-common
+      - cephadm
+  become: true
+  tasks:
+    - name: install ceph packages
+      package:
+        name: "{{ ceph_packages }}"
+        state: installed

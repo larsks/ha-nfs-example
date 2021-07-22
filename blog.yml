@@ -1,0 +1,6 @@
+- import_playbook: update-etc-hosts.yml
+
+- import_playbook: ceph-bootstrap.yml
+- import_playbook: ceph-copy-key.yml
+- import_playbook: ceph-add-hosts.yml
+- import_playbook: ceph-add-disks.yml

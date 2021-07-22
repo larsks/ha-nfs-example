@@ -1,0 +1,11 @@
+- name: bootstrap ceph cluster
+  hosts: ceph_servers[0]
+  become: true
+  gather_facts: true
+  tasks:
+    - name: bootstrap ceph
+      command: >-
+        cephadm bootstrap --mon-ip {{ ansible_default_ipv4.address }}
+        --allow-fqdn-hostname
+      args:
+        creates: /etc/ceph/ceph.conf

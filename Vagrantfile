@@ -1,7 +1,7 @@
 # vim: set ft=ruby:
 
 Vagrant.configure("2") do |config|
-  num_ceph=1
+  num_ceph=3
   num_nfs=2
   num_clients=2
 
@@ -15,6 +15,7 @@ Vagrant.configure("2") do |config|
 
   (1..num_ceph).each do |machine_id|
     config.vm.define "ceph#{machine_id}" do |ceph|
+      ceph.vm.hostname = "ceph#{machine_id}"
       ceph.vm.provider :libvirt do |libvirt|
         libvirt.storage :file,
           :size => "10G",
@@ -25,11 +26,13 @@ Vagrant.configure("2") do |config|
 
   (1..num_nfs).each do |machine_id|
     config.vm.define "nfs#{machine_id}" do |nfs|
+      nfs.vm.hostname = "nfs#{machine_id}"
     end
   end
 
   (1..num_clients).each do |machine_id|
     config.vm.define "client#{machine_id}" do |client|
+      client.vm.hostname = "client#{machine_id}"
       client.vm.provider :libvirt do |libvirt|
         libvirt.memory = 2048
       end
@@ -38,7 +41,7 @@ Vagrant.configure("2") do |config|
 
   config.vm.provision :ansible do |ansible|
     ansible.compatibility_mode = "2.0"
-    ansible.playbook = "common.yml"
+    ansible.playbook = "provision.yml"
     ansible.groups = {
       "ceph_servers" => Array.new(num_ceph) { |machine_id| "ceph#{machine_id+1}" },
       "nfs_servers" => Array.new(num_nfs) { |machine_id| "nfs#{machine_id+1}" },
