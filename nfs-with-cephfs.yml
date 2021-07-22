@@ -1,0 +1,50 @@
+- hosts: nfs_servers[0]
+  tags: [nfs]
+  become: true
+  tasks:
+    - name: get cib
+      changed_when: false
+      command: pcs cluster cib
+      register: cibxml
+
+    - name: get list of resources
+      xml:
+        xmlstring: "{{ cibxml.stdout }}"
+        xpath: 'configuration/resources//primitive'
+        content: attribute
+      failed_when: false
+      register: resources
+
+    - name: create nfs_vip resource
+      when: not resources.matches|default([])|selectattr('primitive.id', 'eq', 'nfs_vip')|list
+      command: >-
+        pcs resource create --group nfs nfs_vip
+        IPaddr2 ip={{ nfs_vip|ipaddr("address") }} cidr_netmask={{ nfs_vip|ipaddr("prefix") }}
+        op monitor interval=10s
+
+    - name: create nfs_vip resource
+      when: not resources.matches|default([])|selectattr('primitive.id', 'eq', 'nfsd')|list
+      command: >-
+        pcs resource create --group nfs nfsd
+        systemd:nfs-ganesha
+        op monitor interval=10s
+
+    - name: check if nodeid is registered with recovery backend
+      command: >-
+        ganesha-rados-grace
+        --userid {{ ganesha_recovery_user }}
+        --pool {{ ganesha_recovery_pool }}
+        --ns ganesha
+        member {{ ganesha_nodeid }}
+      register: nodeid_check
+      failed_when: false
+      changed_when: nodeid_check.rc != 0
+
+    - name: register nodeid with recovery backend
+      when: nodeid_check is changed
+      command: >-
+        ganesha-rados-grace
+        --userid {{ ganesha_recovery_user }}
+        --pool {{ ganesha_recovery_pool }}
+        --ns ganesha
+        add {{ ganesha_nodeid }}

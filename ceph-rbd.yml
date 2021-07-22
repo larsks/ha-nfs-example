@@ -1,0 +1,47 @@
+- hosts: ceph_servers[0]
+  tags: [ceph.cephfs]
+  become: true
+  tasks:
+    - name: check if pool rbd exists
+      command: ceph osd pool stats rbd
+      register: rbd_pool_status
+      failed_when: false
+      changed_when: rbd_pool_status.rc != 0
+
+    - name: create rbd pool
+      command: ceph osd pool create rbd
+      when: >-
+        rbd_pool_status is changed
+
+    - name: check for min_size on rbd pool
+      changed_when: false
+      command: ceph osd pool get rbd min_size
+      register: rbd_min_size
+
+    - name: set rbd pool min_size
+      when: >-
+        "min_size: {}".format(min_size) not in rbd_min_size.stdout
+      command: ceph osd pool set rbd min_size {{ min_size }}
+      vars:
+        min_size: "{{ [groups.ceph_servers|length, 2]|min }}"
+
+    - name: create client.rbd user
+      command: >-
+        ceph auth get-or-create client.rbd
+      register: client_rbd
+
+    - name: set caps for client.rbd
+      command: >
+        ceph auth caps client.rbd
+        mon 'profile rbd'
+        osd 'profile rbd pool=rbd,profile rbd pool=rbd namespace={{ ganesha_recovery_namespace }}'
+
+    - name: save keyrings
+      delegate_to: localhost
+      copy:
+        dest: credentials/ceph.client.{{ item.name }}.keyring
+        content: "{{ item.content }}"
+      loop:
+        - name: rbd
+          content: |
+            {{ client_rbd.stdout }}

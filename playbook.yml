@@ -40,45 +40,6 @@
     - name: add devices
       command: ceph orch apply osd --all-available-devices
 
-    - name: check if cephfs tank exists
-      changed_when: false
-      command: ceph fs status tank
-      register: tank_status
-
-    - name: create cephfs tank
-      command: ceph fs volume create tank
-      when: >-
-        "Invalid filesystem" in tank_status.stderr
-
-    - name: check for min_size on tank
-      changed_when: false
-      command: ceph osd pool get cephfs.tank.meta min_size
-      register: tank_min_size
-
-    - name: set tank min_size
-      vars:
-        min_size: "{{ [groups.ceph_servers|length, 2]|min }}"
-      when: >-
-        "min_size: {}".format(min_size) not in tank_min_size.stdout
-      block:
-        - command: ceph osd pool set cephfs.tank.meta min_size {{ min_size }}
-        - command: ceph osd pool set cephfs.tank.data min_size {{ min_size }}
-
-    - name: create client.nfs user
-      command: ceph fs authorize tank client.nfs / rw
-      register: client_nfs
-
-    - name: create client.nfsmeta user
-      command: >-
-        ceph auth get-or-create client.nfsmeta
-      register: client_nfsmeta
-
-    - name: set caps for client.nfsmeta
-      command: >
-        ceph auth caps client.nfsmeta
-        mon 'allow r'
-        osd 'allow rw pool=cephfs.tank.meta namespace=ganesha'
-
     - name: generate ceph conf
       changed_when: false
       command: ceph config generate-minimal-conf
@@ -90,19 +51,6 @@
         dest: credentials/ceph.conf
         content: |
           {{ ceph_conf.stdout }}
-
-    - name: save keyrings
-      delegate_to: localhost
-      copy:
-        dest: credentials/ceph.client.{{ item.name }}.keyring
-        content: "{{ item.content }}"
-      loop:
-        - name: nfs
-          content: |
-            {{ client_nfs.stdout }}
-        - name: nfsmeta
-          content: |
-            {{ client_nfsmeta.stdout }}
 
 - hosts: nfs_servers
   tags: [ceph]
@@ -125,60 +73,7 @@
       loop: "{{ query('fileglob', 'credentials/*.keyring') }}"
 
 - hosts: nfs_servers
-  tags: [nfs]
+  tags: [nfs, nfs.cluster]
   roles:
     - pacemaker
     - ganesha
-
-- hosts: nfs_servers[0]
-  tags: [nfs]
-  become: true
-  tasks:
-    - name: get cib
-      changed_when: false
-      command: pcs cluster cib
-      register: cibxml
-
-    - name: get list of resources
-      xml:
-        xmlstring: "{{ cibxml.stdout }}"
-        xpath: 'configuration/resources//primitive'
-        content: attribute
-      failed_when: false
-      register: resources
-
-    - name: create nfs_vip resource
-      when: not resources.matches|default([])|selectattr('primitive.id', 'eq', 'nfs_vip')|list
-      command: >-
-        pcs resource create --group nfs nfs_vip
-        IPaddr2 ip={{ nfs_vip|ipaddr("address") }} cidr_netmask={{ nfs_vip|ipaddr("prefix") }}
-        op monitor interval=10s
-
-    - name: create nfs_vip resource
-      when: not resources.matches|default([])|selectattr('primitive.id', 'eq', 'nfsd')|list
-      command: >-
-        pcs resource create --group nfs nfsd
-        systemd:nfs-ganesha
-        op monitor interval=10s
-
-    - name: check if nodeid is registered with recovery backend
-      command: >-
-        ganesha-rados-grace
-        --userid {{ ganesha_recovery_user }}
-        --pool {{ ganesha_recovery_pool }}
-        --ns ganesha
-        member {{ ganesha_nodeid }}
-      register: nodeid_check
-      failed_when: false
-      changed_when: nodeid_check.rc != 0
-
-    - name: register nodeid with recovery backend
-      when: nodeid_check is changed
-      command: >-
-        ganesha-rados-grace
-        --userid {{ ganesha_recovery_user }}
-        --pool {{ ganesha_recovery_pool }}
-        --ns ganesha
-        add {{ ganesha_nodeid }}
-
-- import_playbook: clients.yml
