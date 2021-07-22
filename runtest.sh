@@ -9,8 +9,16 @@ while :; do
                 echo "*** iteration took $delta seconds ***"
         fi
 
-        fid=$(( RANDOM % 100 ))
-        date > file$fid
-        echo "file$fid: $(cat file$fid)"
+        fid=$(( RANDOM % 20 ))
+	(
+		trap "rmdir file$fid.lock" EXIT
+		while ! mkdir file$fid.lock > /dev/null 2>&1; do
+			echo "waiting for lock on file$fid"
+			sleep 0.5
+		done
+
+		date > file$fid
+		echo "file$fid: $(cat file$fid)"
+	)
         sleep 1
 done

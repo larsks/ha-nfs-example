@@ -45,3 +45,5 @@
         - name: rbd
           content: |
             {{ client_rbd.stdout }}
+
+- import_playbook: post-ceph.yml

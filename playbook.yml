@@ -53,26 +53,6 @@
           {{ ceph_conf.stdout }}
 
 - hosts: nfs_servers
-  tags: [ceph]
-  become: true
-  tasks:
-    - name: install ceph-common
-      package:
-        name: ceph-common
-        state: installed
-
-    - name: create ceph.conf
-      copy:
-        dest: /etc/ceph/ceph.conf
-        src: credentials/ceph.conf
-
-    - name: create keyrings
-      copy:
-        dest: /etc/ceph/
-        src: "{{ item }}"
-      loop: "{{ query('fileglob', 'credentials/*.keyring') }}"
-
-- hosts: nfs_servers
   tags: [nfs, nfs.cluster]
   roles:
     - pacemaker

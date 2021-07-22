@@ -19,6 +19,6 @@
       mount:
         src: "{{ nfs_vhostname }}:/data"
         path: /data
-        state: mounted
+        state: present
         fstype: nfs
         opts: nfsvers=4,minorversion=2

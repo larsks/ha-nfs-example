@@ -1,0 +1,12 @@
+module ganesha_local 1.0;
+
+require {
+        type default_t;
+        type ganesha_t;
+        class dir { create rmdir };
+        class file setattr;
+}
+
+#============= ganesha_t ==============
+allow ganesha_t default_t:dir { create rmdir };
+allow ganesha_t default_t:file setattr;

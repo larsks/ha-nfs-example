@@ -1,22 +1,35 @@
-- hosts: nfs_servers
-  tags: [nfs]
+- hosts: nfs_servers[0]
+  tags: [nfs.ganesha]
   become: true
   tasks:
-    - name: install additional packages
-      package:
-        name: "{{ packages }}"
-        state: installed
-      vars:
-        packages:
-          - lvm2-lockd
-          - dlm
-          - kernel-modules-extra
+    - name: check if nodeid is registered with recovery backend
+      command: >-
+        ganesha-rados-grace
+        --userid {{ ganesha_recovery_user }}
+        --pool {{ ganesha_recovery_pool }}
+        --ns {{ ganesha_recovery_namespace }}
+        member {{ ganesha_nodeid }}
+      register: nodeid_check
+      failed_when: false
+      changed_when: nodeid_check.rc != 0
 
-    - name: enable dlm service
-      service:
-        name: dlm
-        state: started
-        enabled: true
+    - name: register nodeid with recovery backend
+      when: nodeid_check is changed
+      command: >-
+        ganesha-rados-grace
+        --userid {{ ganesha_recovery_user }}
+        --pool {{ ganesha_recovery_pool }}
+        --ns {{ ganesha_recovery_namespace }}
+        add {{ ganesha_nodeid }}
+
+- hosts: nfs_servers
+  tags: [nfs.common]
+  become: true
+  tasks:
+    - name: ensure mountpoint exists
+      file:
+        path: /data
+        state: directory
 
     - name: create directory for ceph resource providers
       file:
@@ -31,13 +44,69 @@
         group: root
         mode: "0755"
 
-    - name: configure lvm
-      copy:
-        src: lvmlocal.conf
-        dest: /etc/lvm/lvmlocal.conf
-        owner: root
-        group: root
-        mode: "0644"
+- hosts: nfs_servers[0]
+  tags: [nfs.rbd]
+  become: true
+  tasks:
+    - name: check if cluster has been configured
+      command: >-
+        pcs resource status
+      register: rscheck
+
+    - when: >-
+        "NO resources configured" in rscheck.stdout
+      block:
+        - name: check if rbd exists
+          command: >-
+            rbd -n client.rbd info nfs_store
+          register: rbdcheck
+          failed_when: false
+          changed_when: rbdcheck.rc != 0
+
+        - name: create rbd
+          command: >-
+            rbd -n client.rbd create nfs_store --size 10G
+          when: rbdcheck is changed
+
+        - name: map rbd
+          command: >-
+            rbd -n client.rbd device map nfs_store
+
+        - name: look for filesystem on nfs_store
+          command: >-
+            wipefs -J /dev/rbd/rbd/nfs_store
+          register: fscheck_cmd
+
+        - when: fscheck.signatures|length == 0
+          vars:
+            fscheck: "{{ fscheck_cmd.stdout|from_json }}"
+          name: create filesystem on volume
+          command: >-
+            mkfs.xfs /dev/rbd/rbd/nfs_store
+
+        - block:
+            - name: temporarily mount filesystem
+              mount:
+                src: /dev/rbd/rbd/nfs_store
+                path: /data
+                fstype: xfs
+                opts: noauto
+                state: mounted
+
+            - name: ensure correct selinux permissions on export
+              command: >-
+                restorecon -R /data
+
+          always:
+            - name: unmount volume
+              command: >-
+                umount /data
+              ignore_errors: true
+      always:
+        - name: unmap rbd
+          command: >-
+            rbd -n client.rbd device unmap nfs_store
+          ignore_errors: true
 
 - hosts: nfs_servers[0]
   tags: [nfs.pacemaker]
@@ -75,96 +144,6 @@
             IPaddr2 ip={{ nfs_vip|ipaddr("address") }} cidr_netmask={{ nfs_vip|ipaddr("prefix") }}
             op monitor interval=10s
 
-        - name: create lvmlockd resource
-          when: not resources.matches|default([])|selectattr('primitive.id', 'eq', 'nfs_lock')|list
-          command: >-
-            pcs -f {{ tmpfile.path }}
-            resource create --group nfs nfs_lock
-            ocf:heartbeat:lvmlockd
-
-        - name: activate cib changes
-          command: >-
-            pcs cluster cib-push --wait {{ tmpfile.path }}
-
-      always:
-        - name: remove temporary file
-          file:
-            path: "{{ tmpfile.path }}"
-            state: absent
-
-- hosts: nfs_servers[0]
-  tags: [nfs.rbd]
-  become: true
-  tasks:
-    - name: check if rbd exists
-      command: >-
-        rbd -n client.rbd info nfs_store
-      register: rbdcheck
-      failed_when: false
-      changed_when: rbdcheck.rc != 0
-
-    - name: create rbd
-      command: >-
-        rbd -n client.rbd create nfs_store --size 10G
-      when: rbdcheck is changed
-
-    - block:
-        - name: map rbd
-          command: >-
-            rbd -n client.rbd device map nfs_store
-
-        - name: create volume group
-          community.general.lvg:
-            pvs: /dev/rbd/rbd/nfs_store
-            vg: nfs_vg
-            vg_options: --locktype dlm
-
-        - name: create volume
-          community.general.lvol:
-            vg: nfs_vg
-            lv: nfs_lv
-            size: 100%VG
-          register: nfs_lv
-
-        - name: create filesystem on volume
-          command: >-
-            mkfs.xfs /dev/nfs_vg/nfs_lv
-          when: nfs_lv is changed
-
-      always:
-        - name: unmap rbd
-          command: >-
-            rbd -n client.rbd device unmap nfs_store
-          ignore_errors: true
-
-- hosts: nfs_servers[0]
-  tags: [nfs.pacemaker]
-  become: true
-  tasks:
-    - name: create temporary file
-      tempfile:
-        prefix: cib
-      register: tmpfile
-
-    - block:
-        - name: get cib
-          changed_when: false
-          command: pcs cluster cib
-          register: cibxml
-
-        - name: write cib to tmpfile
-          copy:
-            content: "{{ cibxml.stdout }}"
-            dest: "{{ tmpfile.path }}"
-
-        - name: get list of resources
-          xml:
-            xmlstring: "{{ cibxml.stdout }}"
-            xpath: 'configuration/resources//primitive'
-            content: attribute
-          failed_when: false
-          register: resources
-
         - name: create rbd resource
           when: not resources.matches|default([])|selectattr('primitive.id', 'eq', 'nfs_rbd')|list
           command: >-
@@ -172,32 +151,29 @@
             resource create --group nfs nfs_rbd
             ocf:ceph:rbd name=nfs_store user=rbd
 
-        - name: create lvm resource
-          when: not resources.matches|default([])|selectattr('primitive.id', 'eq', 'nfs_lv')|list
-          command: >-
-            pcs -f {{ tmpfile.path }}
-            resource create --group nfs nfs_lv
-            ocf:heartbeat:LVM-activate vgname=nfs_vg lvname=nfs_lv
-            vg_access_mode=lvmlockd
-
-        - name: create lvm resource constraints
-          when: not resources.matches|default([])|selectattr('primitive.id', 'eq', 'nfs_lv')|list
-          command: >-
-            pcs -f {{ tmpfile.path }}
-            constraint order {{ item }} then nfs_lv
-          loop:
-            - nfs_lock
-            - nfs_rbd
+        - name: create filesystem resource
+          when: not resources.matches|default([])|selectattr('primitive.id', 'eq', 'nfs_fs')|list
+          block:
+            - command: >-
+                pcs -f {{ tmpfile.path }}
+                resource create --group nfs nfs_fs
+                ocf:heartbeat:Filesystem
+                device=/dev/rbd/rbd/nfs_store directory=/data fstype=xfs
+            - command: >-
+                pcs -f {{ tmpfile.path }}
+                constraint order nfs_rbd then nfs_fs
 
         - name: create nfsd resource
-          when:
-            - false
-            - not resources.matches|default([])|selectattr('primitive.id', 'eq', 'nfsd')|list
-          command: >-
-            pcs -f {{ tmpfile.path }}
-            resource create --group nfs nfsd
-            systemd:nfs-ganesha
-            op monitor interval=10s
+          when: not resources.matches|default([])|selectattr('primitive.id', 'eq', 'nfsd')|list
+          block:
+            - command: >-
+                pcs -f {{ tmpfile.path }}
+                resource create --group nfs nfsd
+                systemd:nfs-ganesha
+                op monitor interval=10s
+            - command: >-
+                pcs -f {{ tmpfile.path }}
+                constraint order nfs_fs then nfsd
 
         - name: activate cib changes
           command: >-
@@ -208,27 +184,3 @@
           file:
             path: "{{ tmpfile.path }}"
             state: absent
-
-- hosts: nfs_servers[0]
-  tags: [nfs.ganesha]
-  become: true
-  tasks:
-    - name: check if nodeid is registered with recovery backend
-      command: >-
-        ganesha-rados-grace
-        --userid {{ ganesha_recovery_user }}
-        --pool {{ ganesha_recovery_pool }}
-        --ns {{ ganesha_recovery_namespace }}
-        member {{ ganesha_nodeid }}
-      register: nodeid_check
-      failed_when: false
-      changed_when: nodeid_check.rc != 0
-
-    - name: register nodeid with recovery backend
-      when: nodeid_check is changed
-      command: >-
-        ganesha-rados-grace
-        --userid {{ ganesha_recovery_user }}
-        --pool {{ ganesha_recovery_pool }}
-        --ns {{ ganesha_recovery_namespace }}
-        add {{ ganesha_nodeid }}
