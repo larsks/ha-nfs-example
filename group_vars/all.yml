@@ -1,2 +1,3 @@
 ansible_python_interpreter: /usr/bin/python3
 nfs_vip: 192.168.121.200/24
+creds_cache: ../credentials

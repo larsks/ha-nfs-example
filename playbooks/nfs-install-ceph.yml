@@ -11,7 +11,7 @@
 
     - name: install ceph.conf
       copy:
-        src: credentials/ceph.conf
+        src: "{{ creds_cache }}/ceph.conf"
         dest: /etc/ceph/
         owner: root
         group: root
@@ -19,7 +19,7 @@
 
     - name: install client.rbd keyring
       copy:
-        src: credentials/ceph.client.rbd.keyring
+        src: "{{ creds_cache }}/ceph.client.rbd.keyring"
         dest: /etc/ceph
         owner: root
         group: root

@@ -13,5 +13,5 @@
     - name: copy ceph.conf to control host
       fetch:
         src: /etc/ceph/ceph.conf
-        dest: credentials/
+        dest: "{{ creds_cache }}/"
         flat: true

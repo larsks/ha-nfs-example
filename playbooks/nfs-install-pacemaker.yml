@@ -5,7 +5,7 @@
       - pcs
       - pacemaker
     hacluster_password: >-
-      {{ lookup('password', 'credentials/hacluster', length=30) }}
+      {{ lookup('password', creds_cache ~ '/hacluster', length=30) }}
   tasks:
     - name: install pacemaker packages
       become: true

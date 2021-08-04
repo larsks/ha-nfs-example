@@ -1,0 +1,7 @@
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: ensure credentials directory exists
+      file:
+        path: "{{ creds_cache }}"
+        state: directory

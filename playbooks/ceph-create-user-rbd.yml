@@ -24,6 +24,6 @@
     - name: save keyrings
       delegate_to: localhost
       copy:
-        dest: credentials/ceph.client.rbd.keyring
+        dest: "{{ creds_cache }}/ceph.client.rbd.keyring"
         content: |
           {{ client_rbd.stdout }}
