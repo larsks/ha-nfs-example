@@ -15,3 +15,8 @@
         line: "{{ hostvars[item].ansible_default_ipv4.address }} {{ hostvars[item].inventory_hostname }} {{ hostvars[item].inventory_hostname.split('.').0 }}"
       when: hostvars[item].ansible_default_ipv4 is defined
       loop: "{{ groups.all }}"
+
+    - name: ensure local hostname is set
+      command: hostnamectl set-hostname {{ inventory_hostname.split('.').0 }}
+      when: >-
+        "localhost" in ansible_hostname

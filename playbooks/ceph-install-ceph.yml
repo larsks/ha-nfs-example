@@ -5,6 +5,11 @@
       - cephadm
   become: true
   tasks:
+    - name: install ceph repo
+      package:
+        name: centos-release-ceph-pacific.noarch
+        state: installed
+
     - name: install ceph packages
       package:
         name: "{{ ceph_packages }}"

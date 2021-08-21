@@ -1,0 +1,10 @@
+- hosts: all
+  gather_facts: false
+  tasks:
+    - name: switch to centos tream
+      command: >-
+        dnf -y swap centos-linux-repos centos-stream-repos
+
+    - name: upgrade packages
+      command: >-
+        dnf -y distro-sync

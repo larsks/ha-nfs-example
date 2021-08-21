@@ -1,5 +1,6 @@
 - import_playbook: setup-local-host.yml
 - import_playbook: update-etc-hosts.yml
+- import_playbook: switch-to-stream.yml
 
 - import_playbook: ceph-install-ceph.yml
 - import_playbook: ceph-bootstrap.yml

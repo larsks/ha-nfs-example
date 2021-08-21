@@ -17,7 +17,7 @@ Vagrant.configure("2") do |config|
       ceph.vm.hostname = "ceph#{machine_id}"
       ceph.vm.provider :libvirt do |libvirt|
         libvirt.storage :file,
-          :size => "10G",
+          :size => "50G",
           :type => "qcow2"
       end
     end
